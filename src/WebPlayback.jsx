@@ -1,39 +1,105 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
-function WebPlayback({ token }) {
-  const [player, setPlayer] = useState(null);
+const track = {
+    name: "",
+    album: {
+        images: [
+            { url: "" }
+        ]
+    },
+    artists: [
+        { name: "" }
+    ]
+};
 
-  useEffect(() => {
-    const script = document.createElement('script');
-    script.src = "https://sdk.scdn.co/spotify-player.js";
-    script.async = true;
-    document.body.appendChild(script);
+function WebPlayback(props) {
+    const [is_paused, setPaused] = useState(false);
+    const [is_active, setActive] = useState(false);
+    const [current_track, setTrack] = useState(track);
 
-    window.onSpotifyWebPlaybackSDKReady = () => {
-      const p = new window.Spotify.Player({
-        name: 'Web Playback SDK Quick Start',
-        getOAuthToken: cb => { cb(token); },
-        volume: 0.5
-      });
-      setPlayer(p);
+    const [player, setPlayer] = useState(undefined);
 
-      p.addListener('ready', ({ device_id }) => {
-        console.log('Ready with Device ID', device_id);
-      });
-      p.addListener('not_ready', ({ device_id }) => {
-        console.log('Device ID went offline', device_id);
-      });
+    useEffect(() => {
+        const script = document.createElement("script");
+        script.src = "https://sdk.scdn.co/spotify-player.js";
+        script.async = true;
+        document.body.appendChild(script);
 
-      p.connect();
-    };
-  }, [token]);
+        player.addListener('player_state_changed', ( state => {
+          if (!state) {
+            return;
+          }
 
-  return (
-    <div>
-      <h2>Spotify Web Player</h2>
-      <div>Player: {player ? 'Ready' : 'Loading...'}</div>
-    </div>
-  );
+          setTrack(state.track_window.current_track);
+          setPaused(state.paused);
+
+          player.getCurrentState().then( state => { 
+            (!state)? setActive(false) : setActive(true) 
+          });
+
+        }));
+
+        window.onSpotifyWebPlaybackSDKReady = () => {
+            const playerInstance = new window.Spotify.Player({
+                name: 'Web Playback SDK',
+                getOAuthToken: cb => { cb(props.token); },
+                volume: 0.5
+            });
+
+            setPlayer(playerInstance);
+
+            playerInstance.addListener('ready', ({ device_id }) => {
+                console.log('Ready with Device ID', device_id);
+            });
+
+            playerInstance.addListener('not_ready', ({ device_id }) => {
+                console.log('Device ID has gone offline', device_id);
+            });
+
+            playerInstance.connect();
+        };
+
+        // cleanup function
+        return () => {
+            if (player) {
+                player.disconnect();
+            }
+            document.body.removeChild(script);
+        };
+    }, [props.token]);
+
+    return (
+    <>
+        <div className="container">
+            <div className="main-wrapper">
+                <img src={current_track.album.images[0].url} 
+                     className="now-playing__cover" alt="" />
+
+                <div className="now-playing__side">
+                    <div className="now-playing__name">{
+                                  current_track.name
+                                  }</div>
+
+                    <div className="now-playing__artist">{
+                                  current_track.artists[0].name
+                                  }</div>
+                </div>
+                <button className="btn-spotify" onClick={() => { player.previousTrack() }} >
+                      &lt;&lt;
+                </button>
+
+                <button className="btn-spotify" onClick={() => { player.togglePlay() }} >
+                    { is_paused ? "PLAY" : "PAUSE" }
+                </button>
+
+                <button className="btn-spotify" onClick={() => { player.nextTrack() }} >
+                      &gt;&gt;
+                </button>
+
+            </div>
+        </div>
+     </>
+    );
 }
 
 export default WebPlayback;

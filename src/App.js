@@ -1,22 +1,27 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import WebPlayback from './WebPlayback';
 import Login from './Login';
+import './App.css';
 
 function App() {
+
   const [token, setToken] = useState('');
 
   useEffect(() => {
-    async function fetchToken() {
-      const resp = await fetch('/token');  // proxy or direct URL
-      const j = await resp.json();
-      setToken(j.access_token);
+
+    async function getToken() {
+      const response = await fetch('/auth/token');
+      const json = await response.json();
+      setToken(json.access_token);
     }
-    fetchToken();
+
+    getToken();
+
   }, []);
 
   return (
     <>
-      {token ? <WebPlayback token={token} /> : <Login />}
+        { (token === '') ? <Login/> : <WebPlayback token={token} /> }
     </>
   );
 }
