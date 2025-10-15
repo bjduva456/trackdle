@@ -14,6 +14,10 @@
         <button id="login">Login with Spotify</button>
         <button id="logout" style="display:none">Logout</button>
         <div id="status"></div>
+        <div id="player-controls" style="margin-top:8px">
+          <button id="connectPlayer">Connect Web Player</button>
+          <span id="playerStatus" style="margin-left:8px;color:#666"></span>
+        </div>
       </div>
 
       <section id="playlist-section">
@@ -35,7 +39,9 @@
         <div id="log"></div>
       </section>
 
-      <div id="toast-root"></div>
+  <div id="toast-root"></div>
+  <!-- Spotify Web Playback SDK -->
+  <script src="https://sdk.scdn.co/spotify-player.js"></script>
       <script src="/app.js"></script>
     </main>
   </body>

@@ -155,7 +155,8 @@ app.get('/token', (req, res) => {
     res.json({ access_token, expires_in: req.session.tokens.expires_in });
   }).catch(err => {
     console.error('token ensure error', err);
-    res.status(500).json({ error: 'token_error' });
+    // If ensureAccessToken failed (refresh problems), tell frontend to re-login
+    res.status(401).json({ error: 'refresh_failed' });
   });
 });
 
