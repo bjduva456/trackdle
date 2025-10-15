@@ -20,3 +20,48 @@ input { padding: 8px; margin: 6px; }
 	transition: opacity 180ms ease, transform 180ms ease;
 }
 .toast.show { opacity: 1; transform: translateY(0); }
+
+/* Result banner styles */
+#victoryBanner { margin: 12px 0; padding: 12px; border-radius: 8px; border: 1px solid transparent; }
+#victoryBanner h2 { margin: 0 0 8px 0; }
+.banner-win { background: linear-gradient(90deg,#e6ffe6,#ddffdd); border-color: #b7e6b7; }
+.banner-lose { background: linear-gradient(90deg,#ffe6e6,#ffdddd); border-color: #e6b7b7; }
+
+/* Comparison table */
+#comparisonContainer { margin-top: 12px; }
+#comparisonTable { width: 100%; border-collapse: collapse; }
+#comparisonTable th, #comparisonTable td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; }
+.result-correct { background: #d4ffd4; }
+.result-partial { background: #fff5cc; }
+.result-wrong { background: #ffdede; }
+/* Muted empty cell (placeholder '-') */
+.empty-cell { color: #888; background: transparent; }
+
+/* Attempts label */
+.attempts-label { font-weight: 600; margin-left: 8px; color: #444; }
+
+/* Debug answer */
+#debugAnswer { font-family: monospace; }
+
+/* Suggestions dropdown for guess input */
+.suggestions {
+	position: absolute;
+	left: 6px;
+	right: 140px; /* leave space for Guess button */
+	top: 44px;
+	background: white;
+	border: 1px solid #ddd;
+	border-radius: 4px;
+	box-shadow: 0 6px 18px rgba(0,0,0,0.06);
+	max-height: 240px;
+	overflow: auto;
+	z-index: 999;
+}
+.suggestion-item {
+	padding: 8px 10px;
+	cursor: pointer;
+}
+.suggestion-item:hover, .suggestion-item.active {
+	background: #f0f8ff;
+}
+.suggestion-highlight { font-weight: 700; }

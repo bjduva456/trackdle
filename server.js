@@ -174,15 +174,65 @@ app.post('/api/playlist', async (req, res) => {
   try {
     // make sure access token is valid
     await ensureAccessToken(req);
+    // Request artist ids and album release_date so we can enrich tracks with year and genre
     const resp = await axios.get(`https://api.spotify.com/v1/playlists/${playlistId}/tracks`, {
       headers: { Authorization: `Bearer ${req.session.tokens.access_token}` },
-      params: { fields: 'items(track(id,name,artists(name),preview_url,uri))', limit: 100 },
+      params: { fields: 'items(track(id,name,artists(id,name),preview_url,uri,album(release_date)))', limit: 100 },
     });
 
-    const tracks = resp.data.items
+    // Map base track data and collect artist ids for a subsequent genres lookup
+    const rawTracks = resp.data.items
       .map(i => i.track)
       .filter(t => t && t.id)
-      .map(t => ({ id: t.id, name: t.name, artists: t.artists.map(a => a.name).join(', '), preview_url: t.preview_url, uri: t.uri }));
+      .map(t => ({
+        id: t.id,
+        name: t.name,
+        artists: t.artists.map(a => a.name).join(', '),
+        artist_ids: t.artists.map(a => a.id).filter(Boolean),
+        preview_url: t.preview_url,
+        uri: t.uri,
+        album_release_date: t.album && t.album.release_date,
+      }));
+
+    // Fetch genres for artists (Spotify provides genres on artist objects, not on tracks)
+    const allArtistIds = Array.from(new Set(rawTracks.flatMap(t => t.artist_ids)));
+    const artistGenres = {}; // id -> array of genres
+    // Spotify /artists accepts up to 50 ids per request
+    const BATCH = 50;
+    for (let i = 0; i < allArtistIds.length; i += BATCH) {
+      const batch = allArtistIds.slice(i, i + BATCH);
+      if (!batch.length) continue;
+      const artistsResp = await axios.get(`https://api.spotify.com/v1/artists`, {
+        headers: { Authorization: `Bearer ${req.session.tokens.access_token}` },
+        params: { ids: batch.join(',') },
+      });
+      if (artistsResp && artistsResp.data && Array.isArray(artistsResp.data.artists)) {
+        for (const a of artistsResp.data.artists) {
+          if (!a) continue;
+          artistGenres[a.id] = Array.isArray(a.genres) ? a.genres : [];
+        }
+      }
+    }
+
+    // Build final tracks list with release_year and a representative genre (first genre of first artist)
+    const tracks = rawTracks.map(t => {
+      const year = t.album_release_date ? (t.album_release_date.slice(0,4)) : undefined;
+      // pick genres from the first artist that has any genres
+      let genre = '';
+      for (const aid of t.artist_ids) {
+        const g = artistGenres[aid];
+        if (g && g.length) { genre = g[0]; break; }
+      }
+      return {
+        id: t.id,
+        name: t.name,
+        artists: t.artists,
+        preview_url: t.preview_url,
+        uri: t.uri,
+        release_year: year,
+        genre,
+      };
+    });
 
     res.json({ tracks });
   } catch (err) {

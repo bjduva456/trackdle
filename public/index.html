@@ -18,8 +18,7 @@
           <button id="connectPlayer">Connect Web Player</button>
           <span id="playerStatus" style="margin-left:8px;color:#666"></span>
         </div>
-      </div>
-
+    </div>
       <section id="playlist-section">
         <label>Spotify Playlist URL</label>
         <input id="playlistUrl" placeholder="https://open.spotify.com/playlist/..." style="width:80%" />
@@ -28,15 +27,34 @@
 
       <section id="game" hidden>
         <div id="answerInfo" style="display:none"></div>
+        <!-- Victory banner -->
+        <div id="victoryBanner" role="status" aria-live="polite" hidden>
+          <h2 id="victoryText"></h2>
+          <button id="newGameBtn">Play again</button>
+        </div>
         <div>
           <button id="playClip">Play Clip</button>
           <span id="clipLen">Clip 1s</span>
+          <button id="giveUpBtn" style="margin-left:8px">Give up</button>
         </div>
-        <div>
-          <input id="guessInput" placeholder="Guess artist or title" />
+        <div style="position:relative">
+          <input id="guessInput" placeholder="Guess song title only" autocomplete="off" />
+          <div id="suggestions" class="suggestions" hidden></div>
           <button id="submitGuess">Guess</button>
+          <span id="attemptsLabel" class="attempts-label">Guess 0/0</span>
         </div>
         <div id="log"></div>
+        <div id="debugAnswer" style="margin-top:6px;color:#b00;font-size:0.9em"></div>
+        <!-- Comparison table shown after each guess -->
+        <div id="comparisonContainer" hidden>
+          <h3>Guess feedback</h3>
+          <table id="comparisonTable">
+            <thead>
+              <tr><th>Title</th><th>Artist</th><th>Release Year</th><th>Genre</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
       </section>
 
   <div id="toast-root"></div>

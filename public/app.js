@@ -14,9 +14,33 @@ let accessToken = null;
 let tracks = [];
 let answer = null;
 let audio = null;
+// Toggle this flag to show/hide debug answer output in the UI and console
+const DEBUG_MODE = false;
 
-const clipSequence = [1, 3, 6, 10, 15, 30];
+// Normalize titles for comparison: lowercase, remove punctuation, remove parentheticals and feat. clauses, collapse whitespace
+function normalizeTitle(s) {
+  if (!s) return '';
+  let t = s.toString().toLowerCase();
+  // remove parenthetical content (e.g., "Song (Live)")
+  t = t.replace(/\([^)]*\)/g, '');
+  // remove common featuring patterns
+  t = t.replace(/\b(feat\.|feat|ft\.|ft|featuring)\b[^-–—,\(]*/g, '');
+  // remove punctuation
+  t = t.replace(/["'“”‘’\.!?\,;:\-–—\/\\]/g, '');
+  // collapse whitespace
+  t = t.replace(/\s+/g, ' ').trim();
+  return t;
+}
+
+const clipSequence = [3, 5, 10, 15, 20, 30];
 let clipIndex = 0;
+const maxAttempts = clipSequence.length;
+let currentAttempt = 0;
+function updateAttemptsLabel() {
+  const el = document.getElementById('attemptsLabel');
+  if (!el) return;
+  el.textContent = `Attempt ${currentAttempt} of ${maxAttempts}`;
+}
 let player = null;
 let deviceId = null;
 const connectPlayerBtn = document.getElementById('connectPlayer');
@@ -24,6 +48,17 @@ const playerStatus = document.getElementById('playerStatus');
 let isPlaying = false;
 // disable guess until a clip has been started
 submitGuessBtn.disabled = true;
+const giveUpBtn = document.getElementById('giveUpBtn');
+// give up should be disabled until a round is active
+if (giveUpBtn) giveUpBtn.disabled = true;
+const victoryBanner = document.getElementById('victoryBanner');
+const victoryText = document.getElementById('victoryText');
+const newGameBtn = document.getElementById('newGameBtn');
+const comparisonContainer = document.getElementById('comparisonContainer');
+const comparisonTableBody = document.querySelector('#comparisonTable tbody');
+const suggestionsBox = document.getElementById('suggestions');
+let suggestionItems = [];
+let suggestionIndex = -1;
 
 async function checkLoggedIn() {
   try {
@@ -73,6 +108,7 @@ logoutBtn.addEventListener('click', async () => {
   // reset buttons
   playClipBtn.disabled = true;
   submitGuessBtn.disabled = true;
+  if (giveUpBtn) giveUpBtn.disabled = true;
 });
 
 // Toast utilities
@@ -146,8 +182,21 @@ async function loadPlaylist() {
 
   // pick random track
   answer = tracks[Math.floor(Math.random() * tracks.length)];
-  console.log('answer', answer);
+  if (DEBUG_MODE) {
+    console.log('selected answer (debug):', answer);
+    const debugEl = document.getElementById('debugAnswer');
+    if (debugEl) debugEl.textContent = `DEBUG ANSWER: ${answer.name} — ${answer.artists}`;
+  } else {
+    const debugEl = document.getElementById('debugAnswer');
+    if (debugEl) debugEl.textContent = '';
+  }
   clipIndex = 0;
+  // clear any banner classes
+  if (victoryBanner) { victoryBanner.classList.remove('banner-win','banner-lose'); victoryBanner.hidden = true; }
+  // enable give up now that a round is active
+  if (giveUpBtn) giveUpBtn.disabled = false;
+  currentAttempt = 0;
+  updateAttemptsLabel();
   // enable play button and set initial clip label
   playClipBtn.disabled = false;
   clipLenLabel.innerText = `Clip ${clipSequence[Math.min(clipIndex, clipSequence.length - 1)]}s`;
@@ -296,29 +345,58 @@ submitGuessBtn.addEventListener('click', () => {
   if (!guess) return;
   if (!answer) return alert('No active track');
 
-  const title = answer.name.toLowerCase();
-  const artists = answer.artists.toLowerCase();
-  const isCorrect = title.includes(guess) || artists.includes(guess) || guess.includes(title) || guess.includes(artists);
+  const title = normalizeTitle(answer.name);
 
-  if (isCorrect) {
-    appendLog(`Correct! Answer: ${answer.name} — ${answer.artists}`);
-    gameSection.hidden = true;
+  // Count this guess as an attempt (increment immediately so wins use the correct attempt number)
+  currentAttempt = Math.min(currentAttempt + 1, maxAttempts);
+  updateAttemptsLabel();
+
+  // Treat every guess as a title guess only — exact match after normalization
+  const titleMatch = title === normalizeTitle(guessInput.value.trim());
+
+  // Build and display a single-row comparison for this title guess
+  showComparisonForGuess(guessInput.value.trim(), answer);
+
+  // Always update the clip length label to reflect the next clip length after a guess
+  {
+    const nextIndex = Math.min(clipIndex, clipSequence.length - 1);
+    clipLenLabel.innerText = `Clip ${clipSequence[nextIndex]}s`;
+  }
+
+  if (titleMatch) {
+    appendLog(`Correct! Title matched. Answer: ${answer.name} — ${answer.artists}`);
+    // show victory banner
+    victoryText.innerText = `You guessed the title: ${answer.name}`;
+    if (victoryBanner) { victoryBanner.classList.remove('banner-lose'); victoryBanner.classList.add('banner-win'); }
+    victoryBanner.hidden = false;
+    gameSection.hidden = false; // keep game visible so banner shows in context
     // stop playback if playing
     if (audio) { audio.pause(); audio = null; }
     if (player) { player.pause().catch(() => {}); }
     isPlaying = false;
-    // no need to re-enable play when game ends
+    // disable further controls until player clicks Play again
     playClipBtn.disabled = true;
+    submitGuessBtn.disabled = true;
+    if (giveUpBtn) giveUpBtn.disabled = true;
   } else {
-    appendLog(`Wrong guess: "${guessInput.value}"`);
     guessInput.value = '';
-    if (clipIndex >= clipSequence.length) {
-      appendLog(`Out of tries — Revealing answer: ${answer.name} — ${answer.artists}`);
-      gameSection.hidden = true;
+    // hide suggestions after an incorrect guess
+    if (suggestionsBox) { suggestionsBox.hidden = true; suggestionItems = []; suggestionIndex = -1; }
+  // Lose condition: player used all attempts
+  if (currentAttempt >= maxAttempts) {
+  appendLog(`Out of tries — Revealing answer: ${answer.name} — ${answer.artists}`);
+  // reveal final answer and show loss banner
+  victoryText.innerText = `You lost — Answer: ${answer.name}`;
+  if (victoryBanner) { victoryBanner.classList.remove('banner-win'); victoryBanner.classList.add('banner-lose'); }
+  victoryBanner.hidden = false;
+      // keep game visible so user can see comparison
+      gameSection.hidden = false;
       if (audio) { audio.pause(); audio = null; }
       if (player) { player.pause().catch(() => {}); }
       isPlaying = false;
       playClipBtn.disabled = true;
+      submitGuessBtn.disabled = true;
+      if (giveUpBtn) giveUpBtn.disabled = true;
       return;
     }
     // stop current playback when user guesses
@@ -331,6 +409,264 @@ submitGuessBtn.addEventListener('click', () => {
     clipLenLabel.innerText = `Clip ${clipSequence[nextIndex]}s`;
   }
 });
+
+newGameBtn.addEventListener('click', () => {
+  // start a new random track from the loaded playlist
+  if (!tracks || !tracks.length) return;
+  answer = tracks[Math.floor(Math.random() * tracks.length)];
+  if (DEBUG_MODE) {
+    console.log('selected answer (debug):', answer);
+    const debugEl = document.getElementById('debugAnswer');
+    if (debugEl) debugEl.textContent = `DEBUG ANSWER: ${answer.name} — ${answer.artists}`;
+  } else {
+    const debugEl = document.getElementById('debugAnswer');
+    if (debugEl) debugEl.textContent = '';
+  }
+  clipIndex = 0;
+  if (victoryBanner) { victoryBanner.hidden = true; victoryBanner.classList.remove('banner-win','banner-lose'); }
+  comparisonContainer.hidden = true;
+  comparisonTableBody.innerHTML = '';
+  playClipBtn.disabled = false;
+  submitGuessBtn.disabled = true;
+  if (giveUpBtn) giveUpBtn.disabled = false;
+  clipLenLabel.innerText = `Clip ${clipSequence[0]}s`;
+  log.innerHTML = '';
+  currentAttempt = 0;
+  updateAttemptsLabel();
+  appendLog('New track selected. Start guessing!');
+});
+
+if (giveUpBtn) {
+  giveUpBtn.addEventListener('click', () => {
+    if (!answer) return;
+    // set attempts to max and show loss banner
+    currentAttempt = maxAttempts;
+    updateAttemptsLabel();
+    appendLog(`Player gave up — Revealing answer: ${answer.name} — ${answer.artists}`);
+    victoryText.innerText = `You gave up — Answer: ${answer.name}`;
+    if (victoryBanner) { victoryBanner.classList.remove('banner-win'); victoryBanner.classList.add('banner-lose'); }
+    victoryBanner.hidden = false;
+    // disable controls
+    if (audio) { audio.pause(); audio = null; }
+    if (player) { player.pause().catch(() => {}); }
+    isPlaying = false;
+    playClipBtn.disabled = true;
+    submitGuessBtn.disabled = true;
+    giveUpBtn.disabled = true;
+  });
+}
+
+function showComparisonForGuess(guessText, answerTrack) {
+  comparisonContainer.hidden = false;
+
+  // don't clear the table: each row represents a guess
+  const tbody = comparisonTableBody;
+
+  const raw = (guessText || '').trim();
+  const guessLower = raw.toLowerCase();
+
+  const title = (answerTrack.name || '').toString();
+  const titleLower = normalizeTitle(title);
+
+  // normalize artists: support array or string
+  let artists = '';
+  if (Array.isArray(answerTrack.artists)) artists = answerTrack.artists.map(a => a.name || a).join(', ');
+  else artists = (answerTrack.artists || '').toString();
+  const artistsLower = artists.toLowerCase();
+
+  const year = (answerTrack.release_year || (answerTrack.album && answerTrack.album.release_date && answerTrack.album.release_date.slice(0,4))) || '';
+  const genre = (answerTrack.genre || '') || '';
+  const genreLower = genre.toLowerCase();
+
+  // Treat every guess as a title guess only — exact match (case-insensitive)
+  const isTitleGuess = titleLower === guessLower;
+
+  // Try to parse a year from guess (e.g., 1999, 2020)
+  const yearMatch = raw.match(/\b(19|20)\d{2}\b/);
+  const guessedYear = yearMatch ? yearMatch[0] : '';
+
+  // For genre, include guessed genre only if guess contains answer genre
+  let guessedGenre = '';
+  if (genre && guessLower.includes(genreLower)) guessedGenre = raw;
+  // Try to find a track in the loaded playlist that matches the guessed title
+  let matchedTrack = null;
+  if (tracks && tracks.length) {
+    const gl = normalizeTitle(raw);
+    matchedTrack = tracks.find(t => {
+      const tname = normalizeTitle(t.name || '');
+      return tname === gl;
+    }) || null;
+  }
+
+  // Prepare target (the actual answer) normalized values for comparison
+  const targetTitle = (answerTrack && answerTrack.name) ? answerTrack.name.toString() : '';
+  const targetTitleLower = normalizeTitle(targetTitle);
+  const targetArtists = (answerTrack && answerTrack.artists) ? (Array.isArray(answerTrack.artists) ? answerTrack.artists.map(a=>a.name||a).join(', ') : answerTrack.artists.toString()) : '';
+  const targetArtistsLower = targetArtists.toLowerCase();
+  const targetYear = (answerTrack && (answerTrack.release_year || (answerTrack.album && answerTrack.album.release_date && answerTrack.album.release_date.slice(0,4)))) || '';
+  const targetGenre = (answerTrack && answerTrack.genre) ? answerTrack.genre.toString() : ''; const targetGenreLower = targetGenre.toLowerCase();
+
+  const tr = document.createElement('tr');
+
+  // Title cell: always show guess; green if matches target, red otherwise
+  const tdTitle = document.createElement('td');
+  tdTitle.textContent = raw;
+  if (targetTitleLower === normalizeTitle(raw)) tdTitle.classList.add('result-correct');
+  else tdTitle.classList.add('result-wrong');
+
+  // Artist cell: if the guessed title maps to a playlist track, show its artist(s) and compare to the target artist(s)
+  const tdArtist = document.createElement('td');
+  if (matchedTrack) {
+    const matchedArtists = Array.isArray(matchedTrack.artists) ? matchedTrack.artists.map(a=>a.name||a).join(', ') : (matchedTrack.artists || '');
+    tdArtist.textContent = matchedArtists;
+    const maLower = matchedArtists.toLowerCase();
+    if (maLower === targetArtistsLower || maLower.includes(targetArtistsLower) || targetArtistsLower.includes(maLower)) tdArtist.classList.add('result-correct');
+    else tdArtist.classList.add('result-wrong');
+  } else {
+    tdArtist.textContent = '-';
+    tdArtist.classList.add('empty-cell');
+  }
+
+  // Year cell
+  const tdYear = document.createElement('td');
+  if (matchedTrack) {
+    const myear = (matchedTrack.release_year || (matchedTrack.album && matchedTrack.album.release_date && matchedTrack.album.release_date.slice(0,4))) || '';
+    tdYear.textContent = myear || '-';
+    if (myear && targetYear && myear.toString() === targetYear.toString()) tdYear.classList.add('result-correct');
+    else if (myear) tdYear.classList.add('result-wrong');
+    else tdYear.classList.add('empty-cell');
+  } else {
+    tdYear.textContent = guessedYear || '-';
+    if (guessedYear && targetYear && guessedYear === targetYear.toString()) tdYear.classList.add('result-correct');
+    else if (guessedYear) tdYear.classList.add('result-wrong');
+    else tdYear.classList.add('empty-cell');
+  }
+
+  // Genre cell
+  const tdGenre = document.createElement('td');
+  if (matchedTrack) {
+    const mgenre = matchedTrack.genre || '';
+    tdGenre.textContent = mgenre || '-';
+    if (mgenre && targetGenre && mgenre.toLowerCase() === targetGenreLower) tdGenre.classList.add('result-correct');
+    else if (mgenre) tdGenre.classList.add('result-wrong');
+    else tdGenre.classList.add('empty-cell');
+  } else {
+    tdGenre.textContent = guessedGenre || '-';
+    if (guessedGenre && targetGenre && guessedGenre.toLowerCase().includes(targetGenreLower)) tdGenre.classList.add('result-correct');
+    else if (guessedGenre) tdGenre.classList.add('result-wrong');
+    else tdGenre.classList.add('empty-cell');
+  }
+
+  tr.appendChild(tdTitle);
+  tr.appendChild(tdArtist);
+  tr.appendChild(tdYear);
+  tr.appendChild(tdGenre);
+  tbody.appendChild(tr);
+}
+
+// --- Autocomplete / suggestions for guess input ---
+function clearSuggestions() {
+  if (!suggestionsBox) return;
+  suggestionsBox.innerHTML = '';
+  suggestionsBox.hidden = true;
+  suggestionItems = [];
+  suggestionIndex = -1;
+}
+
+function populateSuggestions(filter) {
+  if (!suggestionsBox) return;
+  const q = (filter || '').toString().trim().toLowerCase();
+  suggestionsBox.innerHTML = '';
+  suggestionItems = [];
+  suggestionIndex = -1;
+  if (!q || !tracks || !tracks.length) {
+    suggestionsBox.hidden = true;
+    return;
+  }
+  // find up to 20 unique titles containing the query
+  const seen = new Set();
+  const results = [];
+  for (let i = 0; i < tracks.length && results.length < 20; i++) {
+    const t = (tracks[i].name || '').toString();
+    const norm = t.toLowerCase();
+    if (norm.includes(q) && !seen.has(norm)) {
+      seen.add(norm);
+      results.push(t);
+    }
+  }
+  if (!results.length) { suggestionsBox.hidden = true; return; }
+  // render items
+  results.forEach((text, idx) => {
+    const div = document.createElement('div');
+    div.className = 'suggestion-item';
+    // highlight matching substring
+    const lower = text.toLowerCase();
+    const start = lower.indexOf(q);
+    if (start >= 0) {
+      const before = text.slice(0, start);
+      const match = text.slice(start, start + q.length);
+      const after = text.slice(start + q.length);
+      div.innerHTML = `${escapeHtml(before)}<span class="suggestion-highlight">${escapeHtml(match)}</span>${escapeHtml(after)}`;
+    } else {
+      div.textContent = text;
+    }
+    div.addEventListener('mousedown', (ev) => {
+      // mousedown used to avoid blur before click
+      ev.preventDefault();
+      guessInput.value = text;
+      clearSuggestions();
+      guessInput.focus();
+    });
+    suggestionsBox.appendChild(div);
+    suggestionItems.push(div);
+  });
+  suggestionsBox.hidden = false;
+}
+
+function escapeHtml(s) {
+  return (s+'').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"})[ch]);
+}
+
+// input events
+if (guessInput) {
+  guessInput.addEventListener('input', (e) => {
+    const v = e.target.value || '';
+    populateSuggestions(v);
+  });
+  guessInput.addEventListener('keydown', (e) => {
+    if (!suggestionItems || suggestionItems.length === 0) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      // move down
+      suggestionIndex = Math.min(suggestionIndex + 1, suggestionItems.length - 1);
+      updateSuggestionActive();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      suggestionIndex = Math.max(suggestionIndex - 1, 0);
+      updateSuggestionActive();
+    } else if (e.key === 'Enter') {
+      if (suggestionIndex >= 0 && suggestionIndex < suggestionItems.length) {
+        e.preventDefault();
+        const txt = suggestionItems[suggestionIndex].textContent;
+        guessInput.value = txt;
+        clearSuggestions();
+      }
+    } else if (e.key === 'Escape') {
+      clearSuggestions();
+    }
+  });
+  // hide suggestions on blur (short timeout to allow click)
+  guessInput.addEventListener('blur', () => { setTimeout(() => clearSuggestions(), 120); });
+}
+
+function updateSuggestionActive() {
+  suggestionItems.forEach((el, i) => el.classList.toggle('active', i === suggestionIndex));
+  if (suggestionIndex >= 0 && suggestionIndex < suggestionItems.length) {
+    const el = suggestionItems[suggestionIndex];
+    // ensure visible
+    el.scrollIntoView({ block: 'nearest' });
+  }
+}
 
 // initial check
 checkLoggedIn();
