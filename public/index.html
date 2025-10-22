@@ -23,6 +23,10 @@
         <label>Spotify Playlist URL</label>
         <input id="playlistUrl" placeholder="https://open.spotify.com/playlist/..." style="width:80%" />
         <button id="loadPlaylist">Load</button>
+        <span id="loadingIndicator" hidden style="margin-left:12px;vertical-align:middle">
+          <span class="spinner" aria-hidden="true"></span>
+        </span>
+        <div id="loadingProgress" hidden style="display:inline-block;margin-left:8px;color:#666;font-size:0.9em"></div>
       </section>
 
       <section id="game" hidden>

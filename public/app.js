@@ -3,6 +3,8 @@ const logoutBtn = document.getElementById('logout');
 const status = document.getElementById('status');
 const loadBtn = document.getElementById('loadPlaylist');
 const playlistUrlInput = document.getElementById('playlistUrl');
+const loadingIndicator = document.getElementById('loadingIndicator');
+const loadingProgress = document.getElementById('loadingProgress');
 const gameSection = document.getElementById('game');
 const playClipBtn = document.getElementById('playClip');
 const clipLenLabel = document.getElementById('clipLen');
@@ -174,10 +176,32 @@ async function loadPlaylist() {
   const ok = await checkLoggedIn();
   if (!ok) return alert('Please login first');
 
-  const resp = await apiFetch('/api/playlist', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ playlistUrl: url }) });
-  if (!resp.ok) return alert('Failed to load playlist');
-  const data = await resp.json();
-  tracks = data.tracks || [];
+  // show loading UI
+  if (loadingIndicator) loadingIndicator.hidden = false;
+  if (loadingProgress) { loadingProgress.textContent = 'Loading playlist... (may take a few seconds for large playlists)'; loadingProgress.hidden = false; }
+  // disable controls while loading
+  loadBtn.disabled = true;
+  playClipBtn.disabled = true;
+  submitGuessBtn.disabled = true;
+
+  let data;
+  try {
+    const resp = await apiFetch('/api/playlist', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ playlistUrl: url }) });
+    if (!resp.ok) return alert('Failed to load playlist');
+    data = await resp.json();
+    tracks = data.tracks || [];
+    showToast(`Playlist loaded (${tracks.length} tracks)`);
+  } catch (err) {
+    console.error('loadPlaylist error', err);
+    showToast('Failed to load playlist');
+    alert('Failed to load playlist');
+    return;
+  } finally {
+    // always hide loading UI and re-enable load button; other controls enabled later as appropriate
+    if (loadingIndicator) loadingIndicator.hidden = true;
+    if (loadingProgress) loadingProgress.hidden = true;
+    loadBtn.disabled = false;
+  }
   if (!tracks.length) return alert('No tracks found in playlist');
 
   // pick random track
@@ -250,7 +274,8 @@ playClipBtn.addEventListener('click', async () => {
   }
 
   // advance to next clip length for the next round
-  clipIndex++;
+  // note: do not advance clipIndex here — advances on guess so the label/progression
+  // always moves when the player makes a guess (even if they didn't play audio).
 });
 
 function playPreviewClip(url, seconds) {
@@ -341,8 +366,8 @@ async function playViaWebPlayback(uri, seconds) {
 }
 
 submitGuessBtn.addEventListener('click', () => {
-  const guess = guessInput.value.trim().toLowerCase();
-  if (!guess) return;
+  const rawGuess = (guessInput.value || '').trim();
+  if (!rawGuess) return;
   if (!answer) return alert('No active track');
 
   const title = normalizeTitle(answer.name);
@@ -352,16 +377,18 @@ submitGuessBtn.addEventListener('click', () => {
   updateAttemptsLabel();
 
   // Treat every guess as a title guess only — exact match after normalization
-  const titleMatch = title === normalizeTitle(guessInput.value.trim());
+  const titleMatch = title === normalizeTitle(rawGuess);
 
   // Build and display a single-row comparison for this title guess
-  showComparisonForGuess(guessInput.value.trim(), answer);
+  showComparisonForGuess(rawGuess, answer);
 
-  // Always update the clip length label to reflect the next clip length after a guess
-  {
-    const nextIndex = Math.min(clipIndex, clipSequence.length - 1);
-    clipLenLabel.innerText = `Clip ${clipSequence[nextIndex]}s`;
-  }
+  // Advance the clip index on every guess (cap to last index)
+  clipIndex = Math.min(clipIndex + 1, clipSequence.length - 1);
+  const nextIndex = Math.min(clipIndex, clipSequence.length - 1);
+  clipLenLabel.innerText = `Clip ${clipSequence[nextIndex]}s`;
+
+  // clear the guess input so player doesn't have to
+  guessInput.value = '';
 
   if (titleMatch) {
     appendLog(`Correct! Title matched. Answer: ${answer.name} — ${answer.artists}`);
@@ -379,16 +406,16 @@ submitGuessBtn.addEventListener('click', () => {
     submitGuessBtn.disabled = true;
     if (giveUpBtn) giveUpBtn.disabled = true;
   } else {
-    guessInput.value = '';
     // hide suggestions after an incorrect guess
     if (suggestionsBox) { suggestionsBox.hidden = true; suggestionItems = []; suggestionIndex = -1; }
-  // Lose condition: player used all attempts
-  if (currentAttempt >= maxAttempts) {
-  appendLog(`Out of tries — Revealing answer: ${answer.name} — ${answer.artists}`);
-  // reveal final answer and show loss banner
-  victoryText.innerText = `You lost — Answer: ${answer.name}`;
-  if (victoryBanner) { victoryBanner.classList.remove('banner-win'); victoryBanner.classList.add('banner-lose'); }
-  victoryBanner.hidden = false;
+
+    // Lose condition: player used all attempts
+    if (currentAttempt >= maxAttempts) {
+      appendLog(`Out of tries — Revealing answer: ${answer.name} — ${answer.artists}`);
+      // reveal final answer and show loss banner
+      victoryText.innerText = `You lost — Answer: ${answer.name}`;
+      if (victoryBanner) { victoryBanner.classList.remove('banner-win'); victoryBanner.classList.add('banner-lose'); }
+      victoryBanner.hidden = false;
       // keep game visible so user can see comparison
       gameSection.hidden = false;
       if (audio) { audio.pause(); audio = null; }
@@ -399,14 +426,13 @@ submitGuessBtn.addEventListener('click', () => {
       if (giveUpBtn) giveUpBtn.disabled = true;
       return;
     }
+
     // stop current playback when user guesses
     if (audio) { audio.pause(); audio = null; }
     if (player) { player.pause().catch(() => {}); }
     isPlaying = false;
-    // re-enable play button for the next clip and update label to next length
+    // re-enable play button for the next clip
     playClipBtn.disabled = false;
-    const nextIndex = Math.min(clipIndex, clipSequence.length - 1);
-    clipLenLabel.innerText = `Clip ${clipSequence[nextIndex]}s`;
   }
 });
 

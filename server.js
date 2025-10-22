@@ -174,14 +174,24 @@ app.post('/api/playlist', async (req, res) => {
   try {
     // make sure access token is valid
     await ensureAccessToken(req);
-    // Request artist ids and album release_date so we can enrich tracks with year and genre
-    const resp = await axios.get(`https://api.spotify.com/v1/playlists/${playlistId}/tracks`, {
-      headers: { Authorization: `Bearer ${req.session.tokens.access_token}` },
-      params: { fields: 'items(track(id,name,artists(id,name),preview_url,uri,album(release_date)))', limit: 100 },
-    });
+    // Spotify paginates playlist tracks. Fetch all pages (100 per page) by following `next`/offset.
+    const allItems = [];
+    let offset = 0;
+    const LIMIT = 100;
+    while (true) {
+      const resp = await axios.get(`https://api.spotify.com/v1/playlists/${playlistId}/tracks`, {
+        headers: { Authorization: `Bearer ${req.session.tokens.access_token}` },
+        params: { limit: LIMIT, offset },
+      });
+      if (!resp || !resp.data || !Array.isArray(resp.data.items)) break;
+      allItems.push(...resp.data.items);
+      // stop when there's no next page
+      if (!resp.data.next || resp.data.items.length < LIMIT) break;
+      offset += resp.data.items.length;
+    }
 
     // Map base track data and collect artist ids for a subsequent genres lookup
-    const rawTracks = resp.data.items
+    const rawTracks = allItems
       .map(i => i.track)
       .filter(t => t && t.id)
       .map(t => ({

@@ -65,3 +65,16 @@ input { padding: 8px; margin: 6px; }
 	background: #f0f8ff;
 }
 .suggestion-highlight { font-weight: 700; }
+
+/* Small spinner for loading indicator */
+.spinner {
+	display: inline-block;
+	width: 14px;
+	height: 14px;
+	border: 2px solid rgba(0,0,0,0.15);
+	border-top-color: rgba(0,0,0,0.6);
+	border-radius: 50%;
+	animation: spin 900ms linear infinite;
+	vertical-align: middle;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
