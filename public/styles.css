@@ -1,31 +1,41 @@
-body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; padding: 24px; }
-main { max-width: 800px; margin: auto; }
-button { padding: 8px 12px; margin: 6px; }
-input { padding: 8px; margin: 6px; }
-#log { margin-top: 12px; border-top: 1px solid #ddd; padding-top: 8px; }
+:root{
+	--bg:#f7fafc;
+	--card:#ffffff;
+	--accent:#1db954;
+	--muted:#65737e;
+	--danger:#e96b6b;
+}
+
+/* Ensure the HTML `hidden` attribute actually hides elements even when author CSS
+	sets display values (fixes victory banner staying visible). */
+[hidden] { display: none !important; }
+
+html,body{height:100%;}
+body { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial; background:var(--bg); margin:0; padding:24px; color:#222 }
+main { max-width:980px; margin:24px auto; }
+header h1{margin:0 0 6px 0;font-size:1.6rem}
+
+.card{background:var(--card);border-radius:12px;padding:18px;box-shadow:0 6px 20px rgba(16,24,40,0.06);}
+
+button{appearance:none;border:0;border-radius:8px;padding:8px 12px;margin:6px;background:var(--accent);color:white;font-weight:600;cursor:pointer}
+button[disabled]{opacity:0.5;cursor:not-allowed}
+input,textarea{padding:10px;border-radius:8px;border:1px solid #e6edf3;width:100%;box-sizing:border-box}
+#playlist-section{display:flex;align-items:center;gap:8px}
+#playlist-section input{flex:1;max-width:720px}
+
+#log{margin-top:12px;border-top:1px solid #eee;padding-top:8px;color:var(--muted)}
 
 /* Toast styles */
-.toast {
-	position: fixed;
-	top: 20px;
-	right: 20px;
-	background: rgba(0,0,0,0.85);
-	color: white;
-	padding: 10px 14px;
-	border-radius: 6px;
-	box-shadow: 0 6px 18px rgba(0,0,0,0.2);
-	z-index: 1000;
-	opacity: 0;
-	transform: translateY(-8px);
-	transition: opacity 180ms ease, transform 180ms ease;
-}
-.toast.show { opacity: 1; transform: translateY(0); }
+/* Toast */
+.toast{
+  position:fixed;left:50%;top:24px;transform:translateX(-50%) translateY(-6px);background:#0f1724;color:#fff;padding:10px 16px;border-radius:10px;box-shadow:0 10px 30px rgba(2,6,23,0.2);opacity:0;transition:opacity 180ms ease,transform 180ms ease;z-index:9999}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
 /* Result banner styles */
-#victoryBanner { margin: 12px 0; padding: 12px; border-radius: 8px; border: 1px solid transparent; }
-#victoryBanner h2 { margin: 0 0 8px 0; }
-.banner-win { background: linear-gradient(90deg,#e6ffe6,#ddffdd); border-color: #b7e6b7; }
-.banner-lose { background: linear-gradient(90deg,#ffe6e6,#ffdddd); border-color: #e6b7b7; }
+#victoryBanner{margin:12px 0;padding:12px;border-radius:10px;border:1px solid transparent;display:flex;align-items:center;justify-content:space-between;gap:12px}
+#victoryBanner h2{margin:0;font-size:1.05rem}
+.banner-win{background:linear-gradient(90deg,#eaffef,#e0f7e8);border-color:#b7e6b7;color:#0a6b2e}
+.banner-lose{background:linear-gradient(90deg,#fff0f0,#ffeaea);border-color:#e6b7b7;color:#7a1b1b}
 
 /* Comparison table */
 #comparisonContainer { margin-top: 12px; }
@@ -44,19 +54,7 @@ input { padding: 8px; margin: 6px; }
 #debugAnswer { font-family: monospace; }
 
 /* Suggestions dropdown for guess input */
-.suggestions {
-	position: absolute;
-	left: 6px;
-	right: 140px; /* leave space for Guess button */
-	top: 44px;
-	background: white;
-	border: 1px solid #ddd;
-	border-radius: 4px;
-	box-shadow: 0 6px 18px rgba(0,0,0,0.06);
-	max-height: 240px;
-	overflow: auto;
-	z-index: 999;
-}
+.suggestions{position:absolute;left:6px;right:140px;top:44px;background:#fff;border:1px solid #e6edf3;border-radius:6px;box-shadow:0 8px 30px rgba(2,6,23,0.06);max-height:240px;overflow:auto;z-index:999}
 .suggestion-item {
 	padding: 8px 10px;
 	cursor: pointer;

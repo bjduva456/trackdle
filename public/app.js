@@ -5,6 +5,8 @@ const loadBtn = document.getElementById('loadPlaylist');
 const playlistUrlInput = document.getElementById('playlistUrl');
 const loadingIndicator = document.getElementById('loadingIndicator');
 const loadingProgress = document.getElementById('loadingProgress');
+const playlistInfo = document.getElementById('playlistInfo');
+const playlistCount = document.getElementById('playlistCount');
 const gameSection = document.getElementById('game');
 const playClipBtn = document.getElementById('playClip');
 const clipLenLabel = document.getElementById('clipLen');
@@ -179,6 +181,9 @@ async function loadPlaylist() {
   // show loading UI
   if (loadingIndicator) loadingIndicator.hidden = false;
   if (loadingProgress) { loadingProgress.textContent = 'Loading playlist... (may take a few seconds for large playlists)'; loadingProgress.hidden = false; }
+  if (playlistInfo) { playlistInfo.hidden = true; }
+  // accessibility: mark load button busy
+  loadBtn.setAttribute('aria-busy', 'true');
   // disable controls while loading
   loadBtn.disabled = true;
   playClipBtn.disabled = true;
@@ -191,6 +196,10 @@ async function loadPlaylist() {
     data = await resp.json();
     tracks = data.tracks || [];
     showToast(`Playlist loaded (${tracks.length} tracks)`);
+    if (playlistInfo && playlistCount) {
+      playlistCount.textContent = tracks.length.toString();
+      playlistInfo.hidden = false;
+    }
   } catch (err) {
     console.error('loadPlaylist error', err);
     showToast('Failed to load playlist');
@@ -201,6 +210,7 @@ async function loadPlaylist() {
     if (loadingIndicator) loadingIndicator.hidden = true;
     if (loadingProgress) loadingProgress.hidden = true;
     loadBtn.disabled = false;
+    loadBtn.removeAttribute('aria-busy');
   }
   if (!tracks.length) return alert('No tracks found in playlist');
 
